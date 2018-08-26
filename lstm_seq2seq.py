@@ -6,15 +6,19 @@ import numpy as np
 from keras.callbacks import ModelCheckpoint
 from keras.layers import Input, LSTM, Bidirectional, Concatenate, Dense, merge
 from keras.models import Model
+from pathlib import Path
+
 
 parser = argparse.ArgumentParser(description='Deepword process.')
 parser.add_argument('--batch_size', type=int,
                     help='Batch Size', default=64)
 parser.add_argument('--epochs', type=int, help='Number of Epochs to train on', default=20)
 parser.add_argument('--samples', type=int, help='Number of training samples to train on', default=10000)
-parser.add_argument('--data', type=str, help='Data path')
+parser.add_argument('--data', type=str, help='Data path', default='data.txt')
 parser.add_argument('--latent_dim', type=int, help='Size of the Latent Dimensionality in the encoding space',
                     default=256)
+parser.add_argument('--checkpoint', type=str, help='checkpoint path', default='checkpoint.hdf5')
+
 args = parser.parse_args()
 
 batch_size = args.__dict__["batch_size"]
@@ -23,7 +27,7 @@ latent_dim = args.__dict__['latent_dim']  # Latent dimensionality of the encodin
 num_samples = args.__dict__['samples']  # Number of samples to train on.
 # Path to the data txt file on disk.
 data_path = args.__dict__['data']
-
+checkpoint = args.__dict__['checkpoint']
 # Vectorize the data.
 input_texts = []
 target_texts = []
@@ -117,15 +121,21 @@ decoder_dense = Dense(num_decoder_tokens, activation='softmax')
 decoder_outputs = decoder_dense(decoder_outputs)
 model = Model([encoder_inputs, decoder_inputs], decoder_outputs)
 # Callback
-checkpointer = ModelCheckpoint(filepath='checkpoint.hdf5', verbose=1, period=1)
+checkpointer = ModelCheckpoint(filepath=checkpoint, verbose=1, period=1)
 
 # Run training
 model.compile(optimizer='adagrad',
               loss='categorical_crossentropy')  # categorical_crossentropy sparse_categorical_crossentropy opt=rmsprop
-model.fit([encoder_input_data, decoder_input_data], decoder_target_data,
-          batch_size=batch_size,
-          epochs=epochs,
-          validation_split=0.2, callbacks=[checkpointer])
+checkpoint_path = Path(checkpoint)
+
+if checkpoint_path.is_file():
+    model.load_weights(checkpoint)
+    print("Previous checkpoint found, loading weights.")
+else:
+    model.fit([encoder_input_data, decoder_input_data], decoder_target_data,
+              batch_size=batch_size,
+              epochs=epochs,
+              validation_split=0.2, callbacks=[checkpointer])
 # Save model
 model.summary()
 
