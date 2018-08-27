@@ -2,3 +2,4 @@
 *.h5
 *.xml
 .idea/deepword.iml
+test.py

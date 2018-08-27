@@ -1,13 +1,11 @@
 from __future__ import print_function
 
 import argparse
-
 import numpy as np
 from keras.callbacks import ModelCheckpoint
 from keras.layers import Input, LSTM, Bidirectional, Concatenate, Dense, merge
 from keras.models import Model
 from pathlib import Path
-
 
 parser = argparse.ArgumentParser(description='Deepword process.')
 parser.add_argument('--batch_size', type=int,
