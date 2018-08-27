@@ -3,8 +3,8 @@
 while :
 do
     echo running Python code
-    python3 lstm_seq2seq.py
-    sleep 5h
+    srun python3 lstm_seq2seq.py
+    sleep 1h
 
 done
 
