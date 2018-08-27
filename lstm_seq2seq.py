@@ -1,11 +1,12 @@
 from __future__ import print_function
 
 import argparse
+from pathlib import Path
+
 import numpy as np
 from keras.callbacks import ModelCheckpoint
-from keras.layers import Input, LSTM, Bidirectional, Concatenate, Dense, merge
+from keras.layers import Input, LSTM, Bidirectional, Concatenate, Dense, Multiply
 from keras.models import Model
-from pathlib import Path
 
 parser = argparse.ArgumentParser(description='Deepword process.')
 parser.add_argument('--batch_size', type=int,
@@ -100,8 +101,10 @@ encoder_inputs = Input(shape=(None, num_encoder_tokens))
 
 # attention
 attention_probs = Dense(num_encoder_tokens, activation='softmax', name='attention_probs')(encoder_inputs)
-attention_mul = merge([encoder_inputs, attention_probs], output_shape=(None, num_encoder_tokens), name='attention_mul',
-                      mode='mul')
+# attention_mul = Multiply([encoder_inputs, attention_probs], output_shape=(None, num_encoder_tokens),
+#                          name='attention_mul')
+# attn = Multiply()[encoder_inputs, attention_probs]
+attention_mul = Multiply()([encoder_inputs, attention_probs])
 
 encoder = Bidirectional(LSTM(latent_dim, return_state=True))
 encoder_outputs, forward_h, forward_c, backward_h, backward_c = encoder(attention_mul)
