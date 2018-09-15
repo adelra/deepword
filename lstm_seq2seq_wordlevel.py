@@ -30,74 +30,61 @@ checkpoint = args.__dict__['checkpoint']
 # Vectorize the data.
 input_texts = []
 target_texts = []
-input_characters = set()
-target_characters = set()
+max_encoder_seq_length = 0
 with open(data_path, 'r', encoding='utf-8') as f:
-    lines = f.read().split('\n')
-for line in lines[: min(num_samples, len(lines) - 1)]:
-    words = line.split(' ')
-    input_text_list = []
-    target_text_list = []
-    for index, word in enumerate(words):
-        num_indexes = []
-        for item in range(len(words)):
-            num_indexes.append(item)
-        num_indexes.pop(words.index(word))
-        target_texts.append(word)
-        target_text_list.append(word)
-        for item in num_indexes:
-            input_texts.append(words[item])
-            input_text_list.append(words[item])
-    # We use "tab" as the "start sequence" character
-    # for the targets, and "\n" as "end sequence" character.
-    for input_text in input_text_list:
-        for char in input_text:
-            if char not in input_characters:
-                input_characters.add(char)
-    for target_text in target_text_list:
-        for char in target_text:
-            if char not in target_characters:
-                target_characters.add(char)
+    for line in f:
+        if len(line) > max_encoder_seq_length:
+            max_encoder_seq_length = len(line)
+        else:
+            pass
+        words = line.split(' ')
+        input_text_list = []
+        target_text_list = []
+        for index, word in enumerate(words):
+            num_indexes = []
+            for item in range(len(words)):
+                num_indexes.append(item)
+            num_indexes.pop(words.index(word))
+            target_texts.append(word)
+            target_text_list.append(word)
+            for item in num_indexes:
+                input_texts.append(words[item])
+                input_text_list.append(words[item])
 
-input_characters = sorted(list(input_characters))
-target_characters = sorted(list(target_characters))
-num_encoder_tokens = len(input_characters)
-num_decoder_tokens = len(target_characters)
-max_encoder_seq_length = max([len(txt) for txt in input_texts])
-max_decoder_seq_length = max([len(txt) for txt in target_texts])
+num_encoder_tokens = len(input_texts)
+num_decoder_tokens = len(target_texts)
 
 print('Number of samples:', len(input_texts))
 print('Number of unique input tokens:', num_encoder_tokens)
 print('Number of unique output tokens:', num_decoder_tokens)
 print('Max sequence length for inputs:', max_encoder_seq_length)
-print('Max sequence length for outputs:', max_decoder_seq_length)
 
 input_token_index = dict(
-    [(char, i) for i, char in enumerate(input_characters)])
+    [(word, i) for i, word in enumerate(input_texts)])
 target_token_index = dict(
-    [(char, i) for i, char in enumerate(target_characters)])
+    [(word, i) for i, word in enumerate(target_texts)])
 
 encoder_input_data = np.zeros(
     (len(input_texts), max_encoder_seq_length, num_encoder_tokens),
     dtype='float32')
 decoder_input_data = np.zeros(
-    (len(input_texts), max_decoder_seq_length, num_decoder_tokens),
+    (len(input_texts), max_encoder_seq_length, num_decoder_tokens),
     dtype='float32')
 decoder_target_data = np.zeros(
-    (len(input_texts), max_decoder_seq_length, num_decoder_tokens),
+    (len(input_texts), max_encoder_seq_length, num_decoder_tokens),
     dtype='float32')
 
 for i, (input_text, target_text) in enumerate(zip(input_texts, target_texts)):
-    for t, char in enumerate(input_text):
-        encoder_input_data[i, t, input_token_index[char]] = 1.
-    for t, char in enumerate(target_text):
+    # for t, char in enumerate(input_text):
+    encoder_input_data[i, input_token_index[input_text]] = 1.
+    for t in enumerate(target_text):
         # decoder_target_data is ahead of decoder_input_data by one timestep
-        decoder_input_data[i, t, target_token_index[char]] = 1.
+        decoder_input_data[i, t, target_token_index[target_text]] = 1.
         if t > 0:
             # decoder_target_data will be ahead by one timestep
             # and will not include the start character.
             decoder_target_data[i, t - 1, target_token_index[char]] = 1.
-encoder_inputs = Input(shape=(None, num_encoder_tokens))
+encoder_inputs = Input(shape=(None, max_encoder_seq_length))
 
 # attention
 attention_probs = Dense(num_encoder_tokens, activation='softmax', name='attention_probs')(encoder_inputs)
