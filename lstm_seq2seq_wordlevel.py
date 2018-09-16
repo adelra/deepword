@@ -1,12 +1,12 @@
 from __future__ import print_function
 
 import argparse
-from pathlib import Path
-
 import numpy as np
+import re
 from keras.callbacks import ModelCheckpoint
 from keras.layers import Input, LSTM, Bidirectional, Concatenate, Dense, Multiply
 from keras.models import Model
+from pathlib import Path
 
 parser = argparse.ArgumentParser(description='Deepword process.')
 parser.add_argument('--batch_size', type=int,
@@ -33,6 +33,7 @@ target_texts = []
 max_encoder_seq_length = 0
 with open(data_path, 'r', encoding='utf-8') as f:
     for line in f:
+        line = re.sub("\n|\r|\r\n|\n\r", "", line)
         if len(line) > max_encoder_seq_length:
             max_encoder_seq_length = len(line)
         else:
@@ -65,17 +66,15 @@ target_token_index = dict(
     [(word, i) for i, word in enumerate(target_texts)])
 
 encoder_input_data = np.zeros(
-    (len(input_texts), max_encoder_seq_length, num_encoder_tokens),
-    dtype='float32')
+    (len(input_texts), num_encoder_tokens, num_encoder_tokens), dtype='float32')
 decoder_input_data = np.zeros(
-    (len(input_texts), max_encoder_seq_length, num_decoder_tokens),
+    (len(input_texts), num_decoder_tokens, num_decoder_tokens),
     dtype='float32')
 decoder_target_data = np.zeros(
-    (len(input_texts), max_encoder_seq_length, num_decoder_tokens),
+    (len(input_texts), num_decoder_tokens, num_decoder_tokens),
     dtype='float32')
 
 for i, (input_text, target_text) in enumerate(zip(input_texts, target_texts)):
-    # for t, char in enumerate(input_text):
     encoder_input_data[i, input_token_index[input_text]] = 1.
     for t in enumerate(target_text):
         # decoder_target_data is ahead of decoder_input_data by one timestep
@@ -120,6 +119,7 @@ if checkpoint_path.is_file():
     model.load_weights(checkpoint)
     print("Previous checkpoint found, loading weights.")
 else:
+    # TODO: add accuracy
     model.fit([encoder_input_data, decoder_input_data], decoder_target_data,
               batch_size=batch_size,
               epochs=epochs,
@@ -159,6 +159,7 @@ reverse_target_char_index = dict(
     (i, char) for char, i in target_token_index.items())
 
 
+# TODO: fix decode
 def decode_sequence(input_seq):
     # Encode the input as state vectors.
     states_value = encoder_model.predict(input_seq)
