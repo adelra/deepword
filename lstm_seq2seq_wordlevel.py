@@ -1,12 +1,14 @@
 from __future__ import print_function
 
 import argparse
-import numpy as np
 import re
-from keras.callbacks import ModelCheckpoint
-from keras.layers import Input, LSTM, Bidirectional, Concatenate, Dense, Multiply
-from keras.models import Model
 from pathlib import Path
+
+import numpy as np
+from keras import optimizers
+from keras.callbacks import ModelCheckpoint
+from keras.layers import Input, LSTM, Bidirectional, Concatenate, Dense, Embedding
+from keras.models import Model
 
 parser = argparse.ArgumentParser(description='Deepword process.')
 parser.add_argument('--batch_size', type=int,
@@ -28,105 +30,89 @@ num_samples = args.__dict__['samples']  # Number of samples to train on.
 data_path = args.__dict__['data']
 checkpoint = args.__dict__['checkpoint']
 # Vectorize the data.
-input_texts = []
-target_texts = []
-max_encoder_seq_length = 0
+
+with open(data_path, 'r', encoding='utf-8') as _temp_file:
+    _temp_file_lines = _temp_file.readlines()
+    max_sent_length = max(_temp_file_lines, key=len).split(" ").__len__()
+    _temp_file.close()
+
 with open(data_path, 'r', encoding='utf-8') as f:
-    for line in f:
-        line = re.sub("\n|\r|\r\n|\n\r", "", line)
-        if len(line) > max_encoder_seq_length:
-            max_encoder_seq_length = len(line)
-        else:
-            pass
-        words = line.split(' ')
-        input_text_list = []
-        target_text_list = []
-        for index, word in enumerate(words):
-            num_indexes = []
-            for item in range(len(words)):
-                num_indexes.append(item)
-            num_indexes.pop(words.index(word))
-            target_texts.append(word)
-            target_text_list.append(word)
-            for item in num_indexes:
-                input_texts.append(words[item])
-                input_text_list.append(words[item])
+    lines = f.read().split('\n')
+    all_words = set()
+    input_words = []
+    target_words = []
 
-num_encoder_tokens = len(input_texts)
-num_decoder_tokens = len(target_texts)
+    input_token_index = {}
+    target_token_index = {}
 
-print('Number of samples:', len(input_texts))
-print('Number of unique input tokens:', num_encoder_tokens)
-print('Number of unique output tokens:', num_decoder_tokens)
-print('Max sequence length for inputs:', max_encoder_seq_length)
+    encoder_input_data = np.zeros((len(lines), max_sent_length + 1), dtype='float32')
+    decoder_input_data = np.zeros((len(lines), max_sent_length + 1), dtype='float32')
+    # TODO: add third dimension
+for line in lines:
+    for word in line.split(" "):
+        if word not in all_words:
+            all_words.add(word)
+    decoder_target_data = np.zeros((len(lines), max_sent_length + 1, len(all_words)), dtype='float32')
+    line = re.sub(r"\n|\r\n|\t|[ ]+|", "", line)
+    words = line.split(' ')
+    _words = line.split(' ')
+    for index, word in enumerate(words):
+        _words.pop(_words.index(word))
+        # texts_dic[word] = words
+        # encoder_input_data[i, t] = input_token_index[word]
+        # TODO: length e input bayad be andaze len(words) bashe va output 1 doone
+        # print(encoder_input_data.shape, encoder_input_data)
+        # encoder_input_data = np.insert(encoder_input_data, 0, [1, 2], axis=0)  # _words index
+        # encoder_input_data = np.insert(encoder_input_data, 1, [3, 4], axis=1)  # _words index
+        for target_index, target in enumerate(_words):
+            input_words.append(word)
+            target_words.append(target)
+            encoder_input_data[index, target_index] = 1
+            # TODO: target text inja hamun kalamamoone, yani be tartib index haye target ro behesh midim
+            input_token_index[index] = word
+            target_token_index[target] = target_index
+            decoder_input_data[index, target_index] = 1
+            decoder_target_data[index, target_index - 1, target_token_index[word]] = 1
 
-input_token_index = dict(
-    [(word, i) for i, word in enumerate(input_texts)])
-target_token_index = dict(
-    [(word, i) for i, word in enumerate(target_texts)])
-
-encoder_input_data = np.zeros(
-    (len(input_texts), num_encoder_tokens, num_encoder_tokens), dtype='float32')
-decoder_input_data = np.zeros(
-    (len(input_texts), num_decoder_tokens, num_decoder_tokens),
-    dtype='float32')
-decoder_target_data = np.zeros(
-    (len(input_texts), num_decoder_tokens, num_decoder_tokens),
-    dtype='float32')
-
-for i, (input_text, target_text) in enumerate(zip(input_texts, target_texts)):
-    encoder_input_data[i, input_token_index[input_text]] = 1.
-    for t in enumerate(target_text):
-        # decoder_target_data is ahead of decoder_input_data by one timestep
-        decoder_input_data[i, t, target_token_index[target_text]] = 1.
-        if t > 0:
-            # decoder_target_data will be ahead by one timestep
-            # and will not include the start character.
-            decoder_target_data[i, t - 1, target_token_index[char]] = 1.
-encoder_inputs = Input(shape=(None, max_encoder_seq_length))
-
-# attention
-attention_probs = Dense(num_encoder_tokens, activation='softmax', name='attention_probs')(encoder_inputs)
-# attention_mul = Multiply([encoder_inputs, attention_probs], output_shape=(None, num_encoder_tokens),
-#                          name='attention_mul')
-# attn = Multiply()[encoder_inputs, attention_probs]
-attention_mul = Multiply()([encoder_inputs, attention_probs])
-
-encoder = Bidirectional(LSTM(latent_dim, return_state=True))
-encoder_outputs, forward_h, forward_c, backward_h, backward_c = encoder(attention_mul)
+encoder_inputs = Input(shape=(None,), name="inputt")
+x = Embedding(max_sent_length + 1, latent_dim)(encoder_inputs)
+encoder = Bidirectional(LSTM(latent_dim, return_state=True), name="Encoder")
+encoder_outputs, forward_h, forward_c, backward_h, backward_c = encoder(x)
 state_h = Concatenate()([forward_h, backward_h])
 state_c = Concatenate()([forward_c, backward_c])
 encoder_states = [state_h, state_c]
 
-decoder_inputs = Input(shape=(None, num_decoder_tokens))
+decoder_inputs = Input(shape=(None,))
+y = Embedding(max_sent_length + 1, latent_dim)(decoder_inputs)
+
 decoder_lstm = LSTM(latent_dim * 2, return_sequences=True, return_state=True)
-decoder_outputs, _, _ = decoder_lstm(decoder_inputs, initial_state=encoder_states)
+decoder_outputs, _, _ = decoder_lstm(y, initial_state=encoder_states)
 
 # Define the model that will turn
 # `encoder_input_data` & `decoder_input_data` into `decoder_target_data`
-decoder_dense = Dense(num_decoder_tokens, activation='softmax')
+decoder_dense = Dense(len(all_words), activation='softmax', name="decoder_dense")
 decoder_outputs = decoder_dense(decoder_outputs)
 model = Model([encoder_inputs, decoder_inputs], decoder_outputs)
-# Callback
 checkpointer = ModelCheckpoint(filepath=checkpoint, verbose=1, period=1)
-
-# Run training
-model.compile(optimizer='adagrad',
-              loss='categorical_crossentropy')  # categorical_crossentropy sparse_categorical_crossentropy opt=rmsprop
+optmzr = optimizers.RMSprop(lr=0.1, rho=0.9, epsilon=None, decay=0.0)
+model.compile(optimizer=optmzr,
+              loss='MSE',
+              metrics=['accuracy'])  # categorical_crossentropy sparse_categorical_crossentropy opt=rmsprop
+model.summary()
 checkpoint_path = Path(checkpoint)
-
 if checkpoint_path.is_file():
     model.load_weights(checkpoint)
     print("Previous checkpoint found, loading weights.")
 else:
     # TODO: add accuracy
+    # model.fit([data_gen()[0], data_gen()[1]], data_gen()[2], batch_size=batch_size, epochs=epochs, validation_split=0.2,
+    #           callbacks=[checkpointer])
     model.fit([encoder_input_data, decoder_input_data], decoder_target_data,
               batch_size=batch_size,
               epochs=epochs,
-              validation_split=0.2, callbacks=[checkpointer])
+              validation_split=0.1, callbacks=[checkpointer])
 # Save model
 model.summary()
-
 model.save('s2s.h5')
 
 # Next: inference mode (sampling).
@@ -136,10 +122,9 @@ model.save('s2s.h5')
 # and a "start of sequence" token as target.
 # Output will be the next target token
 # 3) Repeat with the current target token and current states
-
+#TODO: 8 sob esfehan, 7/7
 # Define sampling models
 encoder_model = Model(encoder_inputs, encoder_states)
-
 decoder_state_input_h = Input(shape=(latent_dim * 2,))
 decoder_state_input_c = Input(shape=(latent_dim * 2,))
 decoder_states_inputs = [decoder_state_input_h, decoder_state_input_c]
@@ -153,6 +138,8 @@ decoder_model = Model(
 decoder_model.summary()
 # Reverse-lookup token index to decode sequences back to
 # something readable.
+
+
 reverse_input_char_index = dict(
     (i, char) for char, i in input_token_index.items())
 reverse_target_char_index = dict(
@@ -165,7 +152,7 @@ def decode_sequence(input_seq):
     states_value = encoder_model.predict(input_seq)
 
     # Generate empty target sequence of length 1.
-    target_seq = np.zeros((1, 1, num_decoder_tokens))
+    target_seq = np.zeros((1, 1, all_words))
     # Populate the first character of target sequence with the start character.
     # target_seq[0, 0, target_token_index['\t']] = 1.
 
@@ -184,12 +171,12 @@ def decode_sequence(input_seq):
 
         # Exit condition: either hit max length
         # or find stop character.
-        if (sampled_char == '\n' or
-                len(decoded_sentence) >= max_decoder_seq_length):
-            stop_condition = True
+        # if (sampled_char == '\n' or
+        #         len(decoded_sentence) >= max_decoder_seq_length):
+        #     stop_condition = True
 
         # Update the target sequence (of length 1).
-        target_seq = np.zeros((1, 1, num_decoder_tokens))
+        target_seq = np.zeros((1, 1))
         target_seq[0, 0, sampled_token_index] = 1.
 
         # Update states
@@ -204,5 +191,5 @@ for seq_index in range(10):
     input_seq = encoder_input_data[seq_index: seq_index + 1]
     decoded_sentence = decode_sequence(input_seq)
     print('-')
-    print('Input sentence:', input_texts[seq_index])
+    print('Input sentence:', input_words[seq_index])
     print('Decoded sentence:', decoded_sentence)
