@@ -48,11 +48,14 @@ with open(data_path, 'r', encoding='utf-8') as f:
     encoder_input_data = np.zeros((len(lines), max_sent_length + 1), dtype='float32')
     decoder_input_data = np.zeros((len(lines), max_sent_length + 1), dtype='float32')
     # TODO: add third dimension
+
 for line in lines:
     for word in line.split(" "):
         if word not in all_words:
             all_words.add(word)
-    decoder_target_data = np.zeros((len(lines), max_sent_length + 1, len(all_words)), dtype='float32')
+print(len(lines), max_sent_length + 1, len(all_words))
+decoder_target_data = np.zeros((len(lines), max_sent_length + 1, len(all_words)), dtype='float32')
+for line in lines:
     line = re.sub(r"\n|\r\n|\t|[ ]+|", "", line)
     words = line.split(' ')
     _words = line.split(' ')
@@ -74,7 +77,7 @@ for line in lines:
             decoder_input_data[index, target_index] = 1
             decoder_target_data[index, target_index - 1, target_token_index[word]] = 1
 
-encoder_inputs = Input(shape=(None,), name="inputt")
+encoder_inputs = Input(shape=(None,), name="encoder_inputt")
 x = Embedding(max_sent_length + 1, latent_dim)(encoder_inputs)
 encoder = Bidirectional(LSTM(latent_dim, return_state=True), name="Encoder")
 encoder_outputs, forward_h, forward_c, backward_h, backward_c = encoder(x)
@@ -82,10 +85,10 @@ state_h = Concatenate()([forward_h, backward_h])
 state_c = Concatenate()([forward_c, backward_c])
 encoder_states = [state_h, state_c]
 
-decoder_inputs = Input(shape=(None,))
+decoder_inputs = Input(shape=(None,), name="decoder_inputs")
 y = Embedding(max_sent_length + 1, latent_dim)(decoder_inputs)
 
-decoder_lstm = LSTM(latent_dim * 2, return_sequences=True, return_state=True)
+decoder_lstm = LSTM(latent_dim * 2, return_sequences=True, return_state=True, name="decod")
 decoder_outputs, _, _ = decoder_lstm(y, initial_state=encoder_states)
 
 # Define the model that will turn
@@ -110,7 +113,7 @@ else:
     model.fit([encoder_input_data, decoder_input_data], decoder_target_data,
               batch_size=batch_size,
               epochs=epochs,
-              validation_split=0.1, callbacks=[checkpointer])
+              validation_split=0.2, callbacks=[checkpointer])
 # Save model
 model.summary()
 model.save('s2s.h5')
@@ -122,14 +125,14 @@ model.save('s2s.h5')
 # and a "start of sequence" token as target.
 # Output will be the next target token
 # 3) Repeat with the current target token and current states
-#TODO: 8 sob esfehan, 7/7
+# TODO: 8 sob esfehan, 7/7
 # Define sampling models
 encoder_model = Model(encoder_inputs, encoder_states)
 decoder_state_input_h = Input(shape=(latent_dim * 2,))
 decoder_state_input_c = Input(shape=(latent_dim * 2,))
 decoder_states_inputs = [decoder_state_input_h, decoder_state_input_c]
 decoder_outputs, state_h, state_c = decoder_lstm(
-    decoder_inputs, initial_state=decoder_states_inputs)
+    decoder_inputs, initial_state=decoder_states_inputs, name="decoder")
 decoder_states = [state_h, state_c]
 decoder_outputs = decoder_dense(decoder_outputs)
 decoder_model = Model(
