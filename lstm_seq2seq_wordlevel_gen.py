@@ -100,7 +100,6 @@ model.save('s2s.h5')
 # and a "start of sequence" token as target.
 # Output will be the next target token
 # 3) Repeat with the current target token and current states
-# TODO: 8 sob esfehan, 7/7
 # Define sampling models
 encoder_model = Model(encoder_inputs, encoder_states)
 decoder_state_input_h = Input(shape=(latent_dim * 2,))
