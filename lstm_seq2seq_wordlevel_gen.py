@@ -66,8 +66,7 @@ decoder_dense = Dense(1, activation='softmax', name="decoder_dense")
 decoder_outputs = decoder_dense(decoder_outputs)
 model = Model([encoder_inputs, decoder_inputs], decoder_outputs)
 checkpointer = ModelCheckpoint(filepath=checkpoint, verbose=1, period=1)
-optmzr = optimizers.RMSprop(lr=0.1, rho=0.9, epsilon=None, decay=0.0)
-model.compile(optimizer=optmzr,
+model.compile(optimizer="SGD",
               loss='MSE',
               metrics=['accuracy'])  # categorical_crossentropy sparse_categorical_crossentropy opt=rmsprop
 model.summary()
@@ -105,8 +104,10 @@ encoder_model = Model(encoder_inputs, encoder_states)
 decoder_state_input_h = Input(shape=(latent_dim * 2,))
 decoder_state_input_c = Input(shape=(latent_dim * 2,))
 decoder_states_inputs = [decoder_state_input_h, decoder_state_input_c]
+x_decoder = Embedding(vocab_size, latent_dim, name="embedding_encoder")(decoder_inputs)
+
 decoder_outputs, state_h, state_c = decoder_lstm(
-    decoder_inputs, initial_state=decoder_states_inputs, name="decoder")
+    x_decoder, initial_state=decoder_states_inputs)
 decoder_states = [state_h, state_c]
 decoder_outputs = decoder_dense(decoder_outputs)
 decoder_model = Model(
@@ -135,11 +136,11 @@ def decode_sequence(input_seq):
     output_tokens, h, c = decoder_model.predict(
             [target_seq] + states_value)
 
-    sampled_token_index = np.argmax(output_tokens[0, -1, :])
+    sampled_token_index = np.argmax(output_tokens[0, -1])
     sampled_char = index2word[sampled_token_index]
     decoded_sentence += sampled_char
 
-    target_seq = np.zeros((1, 1))
+    target_seq = np.zeros((1, 1, 1))
     target_seq[0, 0, sampled_token_index] = 1.
 
     states_value = [h, c]
@@ -150,7 +151,8 @@ def decode_sequence(input_seq):
 for seq_index in range(10):
     # Take one sequence (part of the training set)
     # for trying out decoding.
-    input_seq = batch_iterator[seq_index: seq_index + 1]
+    input_seq_generate = next(batch_iterator)
+    input_seq = input_seq_generate[0][0]
     decoded_sentence = decode_sequence(input_seq)
     print('-')
     print('Input sentence:', index2word[seq_index])
