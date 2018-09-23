@@ -78,8 +78,8 @@ sequence_length = len(sequence)
 steps_per_epoch = (sequence_length * (
                 window_size * 2.0) + sequence_length * negative_samples) / batch_size
 if checkpoint_path.is_file():
+    print("Previous checkpoint found, loading weights...")
     model.load_weights(checkpoint)
-    print("Previous checkpoint found, loading weights.")
 else:
     model.fit_generator(batch_iterator,
                         steps_per_epoch=steps_per_epoch,
